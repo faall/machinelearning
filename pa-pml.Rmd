@@ -1,0 +1,81 @@
+---
+title: "Peer Assesment - Excersise Quality Prediction"
+author: "Fabio Alexandre Alberini Lopes Lima"
+date: "4 de noviembre de 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+library(rpart)
+library(randomForest)
+library(doMC)
+registerDoMC(cores = 2)
+# setwd("/home/fabio/Documents/DataScientist/8machineLearning/peer assesment/")
+```
+
+### Overview
+
+The objective of this exercise is to build a prediction model using the data provided by http://groupware.les.inf.puc-rio.br/hal with the ultimate goal of predicting 20 test cases. The data contains measurements from body sensors applied to subjects performing a physical exercise in different manners.
+
+One of the requirements of this exercise is to keep this document short, so there is no extensive printing of objects jumping directly to conclusions or explanation of the decisions taken.
+
+### Data Preparation
+
+Data was previously downloaded from the internet and stored locally. Both training and test data sets are loaded into data frames for the exploratory data analysis.   
+
+```{r read data}
+rawData <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+```
+
+Data from sensors is very extensive (more than 150 columns) but looking into the testing data set we can see that most columns contains only NA's. Training data do contain values for those columns in certain observations (new window observation) but since the final goal is to predict in the testing data there is no sense in training the model with the NA's columns.
+
+The following code removes the NA's columns (basically those with aggregate date like average, variance, etc.) and other data related to the data acquisition process instead of the exercise itself (time stamps, sequence number, etc.).
+
+```{r select columns}
+namCol<-names(testing)
+selCol <- c(1:7, grep("var|avg|stddev|min|max|kurtosis|skewness|amplitude", namCol))
+
+trainData <- rawData[,-selCol]
+testing <- testing[,-c(selCol,160)]
+```
+
+The subset training data set is now split into two data frames, one for training the model and a validation data set to calculate the out of the sample error (remember that the testing data set does not contain the exercise _classe_ and can only be used for the prediction quiz).  
+
+```{r training & validation}
+inTrain <- createDataPartition(y=trainData$classe, p=0.75, list=F)
+
+training <- trainData[inTrain,]
+validation <- trainData[-inTrain,]
+```
+
+### Algorithm Selection and Out Of the Sample Error
+
+Two models are trained: one using a the Tree algorithm and a second with the Random Forest algorithm.
+
+```{r training, cache=TRUE}
+fit3 <- train(classe ~ ., data=training, method="rpart")
+fitRF <- train(classe ~ ., data=training, method="rf", prox=F, ntree=500)
+```
+
+Using the validation data frame we can calculated the expected accuracy and out of the sample error for both algorithms:
+
+- Tree Classification
+
+```{r Tree OOS error}
+pred3 <- predict(fit3, validation)
+confusionMatrix(pred3, validation$classe)$overall[1]
+```
+
+- Random Forrest
+
+```{r RF OOS error}
+predRF <- predict(fitRF, validation)
+confusionMatrix(predRF, validation$classe)$overall[1]
+```
+
+## Conclusion
+
+As expected (because it was said in the classes) the Random Forrest algorithm is the one with the greater accuracy and thus is the one to be used in the final quiz. It is also the algorithm that takes longer computation time but it seems it pays off.   
